@@ -56,23 +56,28 @@ if (isset($_POST['update_role'])) {
     $user_id = $_POST['user_id'];
     $new_role = $_POST['role'];
     
-    // Prevent changing role of current admin user to non-admin
+    // Prevent changing role of admin users
     $current_user_stmt = $conn->prepare("SELECT role FROM users WHERE id = ?");
     $current_user_stmt->bind_param("i", $user_id);
     $current_user_stmt->execute();
     $current_user_result = $current_user_stmt->get_result();
     $current_user = $current_user_result->fetch_assoc();
     
-    if ($current_user && $current_user['role'] === 'admin' && $new_role !== 'admin') {
+    if ($current_user && $current_user['role'] === 'admin') {
         $_SESSION['error'] = "Cannot change administrator role";
     } else {
-        $update_stmt = $conn->prepare("UPDATE users SET role = ? WHERE id = ?");
-        $update_stmt->bind_param("si", $new_role, $user_id);
-        
-        if ($update_stmt->execute()) {
-            $_SESSION['message'] = "User role updated successfully";
+        // Prevent assigning admin role through the interface
+        if ($new_role === 'admin') {
+            $_SESSION['error'] = "Cannot assign administrator role";
         } else {
-            $_SESSION['error'] = "Error updating role: " . $conn->error;
+            $update_stmt = $conn->prepare("UPDATE users SET role = ? WHERE id = ?");
+            $update_stmt->bind_param("si", $new_role, $user_id);
+            
+            if ($update_stmt->execute()) {
+                $_SESSION['message'] = "User role updated successfully";
+            } else {
+                $_SESSION['error'] = "Error updating role: " . $conn->error;
+            }
         }
     }
     
@@ -80,7 +85,7 @@ if (isset($_POST['update_role'])) {
     exit();
 }
 
-// Get all users with course counts
+// Get all users with course counts (including the pre-configured admin)
 $users_query = "
     SELECT u.*, 
            COUNT(DISTINCT c.id) as courses_created,
@@ -98,8 +103,7 @@ $stats_query = "
     SELECT 
         COUNT(*) as total_users,
         SUM(role = 'student') as total_students,
-        SUM(role = 'instructor') as total_instructors,
-        SUM(role = 'admin') as total_admins
+        SUM(role = 'instructor') as total_instructors
     FROM users
 ";
 $stats_result = $conn->query($stats_query);
@@ -159,10 +163,11 @@ $conn->close();
             gap: 10px;
             font-size: 1.5rem;
             font-weight: 700;
+            color: var(--primary);
         }
         
-        .logo span {
-            color: var(--primary);
+        .logo i {
+            font-size: 1.8rem;
         }
         
         .nav-links {
@@ -226,7 +231,6 @@ $conn->close();
         .stat-users .stat-value { color: var(--primary); }
         .stat-students .stat-value { color: var(--success); }
         .stat-instructors .stat-value { color: var(--warning); }
-        .stat-admins .stat-value { color: var(--danger); }
         
         .stat-label {
             color: var(--text-light);
@@ -290,7 +294,7 @@ $conn->close();
         
         .role-student { background: #C6F6D5; color: #22543D; }
         .role-instructor { background: #FEEBC8; color: #744210; }
-        .role-admin { background: #FED7D7; color: #742A2A; }
+        .role-admin { background: #E9D8FD; color: #44337A; }
         
         .actions {
             display: flex;
@@ -318,11 +322,6 @@ $conn->close();
         
         .btn-danger:hover {
             background: #E53E3E;
-        }
-        
-        .btn-danger:disabled {
-            background: #CBD5E0;
-            cursor: not-allowed;
         }
         
         .select-role {
@@ -359,13 +358,28 @@ $conn->close();
             font-size: 0.875rem;
             color: var(--text-light);
         }
+        
+        .admin-note {
+            background: #F0FFF4;
+            border-left: 4px solid var(--success);
+            padding: 1rem;
+            margin: 1rem 0;
+            border-radius: var(--border-radius);
+            font-size: 0.875rem;
+        }
+        
+        .no-actions {
+            color: var(--text-light);
+            font-style: italic;
+            font-size: 0.875rem;
+        }
     </style>
 </head>
 <body>
     <header class="header">
         <div class="logo">
-            <i class="fas fa-graduation-cap"></i>
-            Study<span>Hub</span>
+            <i class="fas fa-lightbulb"></i>
+            StudyHub
         </div>
         <div class="nav-links">
             <a href="admin_dashboard.php">Dashboard</a>
@@ -390,6 +404,10 @@ $conn->close();
             </div>
         <?php endif; ?>
 
+        <div class="admin-note">
+            <i class="fas fa-info-circle"></i> <strong>Note:</strong> Administrator accounts cannot be deleted or have their roles changed. Only "Student" and "Instructor" roles can be assigned to users.
+        </div>
+
         <div class="stats-grid">
             <div class="stat-card stat-users">
                 <div class="stat-value"><?php echo $stats['total_users']; ?></div>
@@ -404,11 +422,6 @@ $conn->close();
             <div class="stat-card stat-instructors">
                 <div class="stat-value"><?php echo $stats['total_instructors']; ?></div>
                 <div class="stat-label">Instructors</div>
-            </div>
-            
-            <div class="stat-card stat-admins">
-                <div class="stat-value"><?php echo $stats['total_admins']; ?></div>
-                <div class="stat-label">Administrators</div>
             </div>
         </div>
 
@@ -447,24 +460,27 @@ $conn->close();
                         <td><?php echo $user['courses_enrolled']; ?></td>
                         <td><?php echo date('M j, Y', strtotime($user['created_at'])); ?></td>
                         <td>
-                            <div class="actions">
-                                <form method="POST">
-                                    <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
-                                    <select name="role" class="select-role" onchange="this.form.submit()" <?php echo $user['role'] === 'admin' ? 'disabled' : ''; ?>>
-                                        <option value="student" <?php echo $user['role'] === 'student' ? 'selected' : ''; ?>>Student</option>
-                                        <option value="instructor" <?php echo $user['role'] === 'instructor' ? 'selected' : ''; ?>>Instructor</option>
-                                        <option value="admin" <?php echo $user['role'] === 'admin' ? 'selected' : ''; ?>>Admin</option>
-                                    </select>
-                                    <input type="hidden" name="update_role" value="1">
-                                </form>
-                                
-                                <form method="POST" onsubmit="return confirm('Are you sure you want to delete <?php echo htmlspecialchars($user['name']); ?>?');">
-                                    <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
-                                    <button type="submit" name="delete_user" class="btn btn-danger" <?php echo $user['role'] === 'admin' ? 'disabled' : ''; ?>>
-                                        <i class="fas fa-trash"></i> Delete
-                                    </button>
-                                </form>
-                            </div>
+                            <?php if ($user['role'] === 'admin'): ?>
+                                <div class="no-actions">No actions available</div>
+                            <?php else: ?>
+                                <div class="actions">
+                                    <form method="POST">
+                                        <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
+                                        <select name="role" class="select-role" onchange="this.form.submit()">
+                                            <option value="student" <?php echo $user['role'] === 'student' ? 'selected' : ''; ?>>Student</option>
+                                            <option value="instructor" <?php echo $user['role'] === 'instructor' ? 'selected' : ''; ?>>Instructor</option>
+                                        </select>
+                                        <input type="hidden" name="update_role" value="1">
+                                    </form>
+                                    
+                                    <form method="POST" onsubmit="return confirm('Are you sure you want to delete <?php echo htmlspecialchars($user['name']); ?>?');">
+                                        <input type="hidden" name="user_id" value="<?php echo $user['id']; ?>">
+                                        <button type="submit" name="delete_user" class="btn btn-danger">
+                                            <i class="fas fa-trash"></i> Delete
+                                        </button>
+                                    </form>
+                                </div>
+                            <?php endif; ?>
                         </td>
                     </tr>
                     <?php endwhile; ?>
@@ -484,5 +500,5 @@ $conn->close();
             });
         }, 5000);
     </script>
-</body>
+</body> 
 </html>

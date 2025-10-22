@@ -21,6 +21,10 @@ if ($conn->connect_error) {
     die('Connection failed: ' . $conn->connect_error);
 }
 
+// Predefined admin credential - NO DATABASE REGISTRATION NEEDED
+$admin_email = 'studyhub2025web@gmail.com';
+$admin_password = 'studyhub2025';
+
 $error = '';
 $success = '';
 
@@ -38,6 +42,20 @@ if (isset($_POST['submit'])) {
     if (empty($email) || empty($password)) {
         $error = "Please fill in all fields.";
     } else {
+        // Check if it's the predefined admin
+        if ($email === $admin_email && $password === $admin_password) {
+            // Login successful for predefined admin
+            $_SESSION['user'] = [
+                'id' => 0,
+                'name' => 'Administrator',
+                'email' => $admin_email,
+                'role' => 'admin',
+                'verified' => 1
+            ];
+            header('Location: admin_dashboard.php');
+            exit();
+        }
+        
         // Check if user exists in the database using prepared statement
         $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
         $stmt->bind_param("s", $email);
@@ -47,18 +65,23 @@ if (isset($_POST['submit'])) {
         if ($result->num_rows > 0) {
             $user = $result->fetch_assoc();
             if (password_verify($password, $user['password'])) {
-                // Login successful, start session
-                $_SESSION['user'] = $user;  // Store user info in session
-
-                // Redirect based on role
-                if ($user['role'] === 'admin') {
-                    header('Location: admin_dashboard.php');
-                } elseif ($user['role'] === 'instructor') {
-                    header('Location: instructor_dashboard.php');
+                // Check if user is verified
+                if ($user['verified'] == 0) {
+                    $error = "Please verify your email before logging in.";
                 } else {
-                    header('Location: student_dashboard.php');
+                    // Login successful, start session
+                    $_SESSION['user'] = $user;  // Store user info in session
+
+                    // Redirect based on role
+                    if ($user['role'] === 'admin') {
+                        header('Location: admin_dashboard.php');
+                    } elseif ($user['role'] === 'instructor') {
+                        header('Location: instructor_dashboard.php');
+                    } else {
+                        header('Location: student_dashboard.php');
+                    }
+                    exit();
                 }
-                exit();
             } else {
                 $error = "Invalid password.";
             }
@@ -443,6 +466,21 @@ $conn->close();
             color: #137333;
             border: 1px solid #b3e0b3;
         }
+
+        .admin-notice {
+            background: #E6FFFA;
+            border: 1px solid #81E6D9;
+            border-radius: var(--border-radius);
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+            color: #234E52;
+        }
+        
+        .admin-notice i {
+            color: #319795;
+            margin-right: 0.5rem;
+        }
         
         /* Features Section */
         .features-section {
@@ -600,7 +638,7 @@ $conn->close();
     <header class="header">
         <div class="logo">
             <div class="logo-icon">
-                <i class="fas fa-graduation-cap"></i>
+                <i class="fas fa-lightbulb"></i>
             </div>
             <div class="logo-text">Study<span>Hub</span></div>
         </div>
@@ -736,6 +774,11 @@ $conn->close();
         <div class="login-form-container">
             <h3 style="margin-bottom: 20px; text-align: center;">Sign In to StudyHub</h3>
             
+            <div class="admin-notice">
+                <i class="fas fa-shield-alt"></i>
+                <strong>Admin Access:</strong> Use predefined credentials for administrator login.
+            </div>
+            
             <?php if (!empty($error)): ?>
                 <div class="alert alert-error">
                     <i class="fas fa-exclamation-circle"></i> <?php echo $error; ?>
@@ -759,7 +802,7 @@ $conn->close();
                     <div class="password-container">
                         <input type="password" id="password" name="password" class="input-field" placeholder="Enter your password" required>
                         <button type="button" class="password-toggle" id="passwordToggle">
-                            <i class="fas fa-eye"></i>
+                            
                         </button>
                     </div>
                 </div>
@@ -778,11 +821,11 @@ $conn->close();
         <div class="footer-content">
             <div class="logo" style="justify-content: center;">
                 <div class="logo-icon">
-                    <i class="fas fa-graduation-cap"></i>
+                    <i class="fas fa-lightbulb"></i>
                 </div>
                 <div class="logo-text">Study<span>Hub</span></div>
             </div>
-            <p>© 2023 StudyHub - Interactive Learning Platform. All rights reserved.</p>
+            <p>© 2025 StudyHub - Interactive Learning Platform. All rights reserved.</p>
             <div class="footer-links">
                 <a href="#">Privacy Policy</a>
                 <a href="#">Terms of Service</a>

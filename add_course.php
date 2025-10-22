@@ -14,17 +14,17 @@ $success = '';
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $title = trim($_POST['title']);
     $description = trim($_POST['description']);
-    $duration = intval($_POST['duration']);
-    $price = floatval($_POST['price']);
     $category = trim($_POST['category']);
     $level = trim($_POST['level']);
+    $course_type = trim($_POST['course_type']); // free or premium
+    $price = ($_POST['course_type'] === 'premium') ? floatval($_POST['price']) : 0.00;
     
     if (empty($title) || empty($description) || empty($category) || empty($level)) {
         $error = "Please fill in all required fields.";
     } else {
         // Insert course
-        $stmt = $conn->prepare("INSERT INTO courses (title, description, instructor, instructor_id, duration, price, category, level, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')");
-        $stmt->bind_param("sssiidss", $title, $description, $user['name'], $user['id'], $duration, $price, $category, $level);
+        $stmt = $conn->prepare("INSERT INTO courses (title, description, instructor, instructor_id, category, level, price, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')");
+        $stmt->bind_param("ssisssd", $title, $description, $user['name'], $user['id'], $category, $level, $price);
         
         if ($stmt->execute()) {
             $course_id = $stmt->insert_id;
@@ -348,13 +348,60 @@ $conn->close();
             margin-top: 10px;
             display: none;
         }
+
+        .course-type-option {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 15px;
+        }
+
+        .type-option {
+            flex: 1;
+            text-align: center;
+            padding: 15px;
+            border: 2px solid #e5e7eb;
+            border-radius: var(--border-radius);
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .type-option:hover {
+            border-color: var(--primary-light);
+        }
+
+        .type-option.selected {
+            border-color: var(--primary);
+            background: #f8fafc;
+        }
+
+        .type-option i {
+            font-size: 1.5rem;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .type-option.free i {
+            color: #10b981;
+        }
+
+        .type-option.premium i {
+            color: #f59e0b;
+        }
+
+        .price-input {
+            display: none;
+        }
+
+        .price-input.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
     <header class="header">
         <div class="logo">
             <div class="logo-icon">
-                <i class="fas fa-graduation-cap"></i>
+                <i class="fas fa-lightbulb"></i>
             </div>
             <div class="logo-text">Study<span>Hub</span></div>
         </div>
@@ -406,25 +453,18 @@ $conn->close();
                 </div>
                 
                 <div class="form-group">
-                    <label for="duration" class="input-label">Duration (hours)</label>
-                    <input type="number" id="duration" name="duration" class="input-field" placeholder="e.g., 10" min="1">
-                </div>
-                
-                <div class="form-group">
-                    <label for="price" class="input-label">Price (৳)</label>
-                    <input type="number" id="price" name="price" class="input-field" placeholder="e.g., 49.99" step="0.01" min="0">
-                </div>
-                
-                <div class="form-group">
                     <label for="category" class="input-label">Category *</label>
                     <select id="category" name="category" class="input-field" required>
                         <option value="">Select Category</option>
+                        <option value="SSC">SSC</option>
+                        <option value="HSC">HSC</option>
                         <option value="Programming">Programming</option>
                         <option value="Mathematics">Mathematics</option>
                         <option value="Science">Science</option>
                         <option value="Business">Business</option>
                         <option value="Arts">Arts</option>
-                        <option value="Language">Language</option>
+                        <option value="Others">Others</option>
+                        
                     </select>
                 </div>
                 
@@ -436,6 +476,28 @@ $conn->close();
                         <option value="Intermediate">Intermediate</option>
                         <option value="Advanced">Advanced</option>
                     </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="input-label">Course Type *</label>
+                    <div class="course-type-option">
+                        <div class="type-option free" onclick="selectCourseType('free')">
+                            <i class="fas fa-gift"></i>
+                            <strong>Free Course</strong>
+                            <p>Available to all students</p>
+                        </div>
+                        <div class="type-option premium" onclick="selectCourseType('premium')">
+                            <i class="fas fa-crown"></i>
+                            <strong>Premium Course</strong>
+                            <p>Paid course with premium content</p>
+                        </div>
+                    </div>
+                    <input type="hidden" id="course_type" name="course_type" value="free" required>
+                </div>
+                
+                <div class="form-group price-input" id="priceInput">
+                    <label for="price" class="input-label">Price (৳) *</label>
+                    <input type="number" id="price" name="price" class="input-field" placeholder="e.g., 499" min="1" step="1">
                 </div>
                 
                 <div class="form-group">
@@ -462,6 +524,36 @@ $conn->close();
     </div>
 
     <script>
+        // Course type selection
+        function selectCourseType(type) {
+            // Remove selected class from all options
+            document.querySelectorAll('.type-option').forEach(option => {
+                option.classList.remove('selected');
+            });
+            
+            // Add selected class to clicked option
+            document.querySelector(`.type-option.${type}`).classList.add('selected');
+            
+            // Update hidden input
+            document.getElementById('course_type').value = type;
+            
+            // Show/hide price input
+            const priceInput = document.getElementById('priceInput');
+            if (type === 'premium') {
+                priceInput.classList.add('show');
+                document.getElementById('price').required = true;
+            } else {
+                priceInput.classList.remove('show');
+                document.getElementById('price').required = false;
+                document.getElementById('price').value = '';
+            }
+        }
+
+        // Initialize with free course selected
+        document.addEventListener('DOMContentLoaded', function() {
+            selectCourseType('free');
+        });
+
         // Simple file preview
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const fileList = document.getElementById('file-list');

@@ -305,7 +305,7 @@ $conn->close();
     <header class="header">
         <div class="logo">
             <div class="logo-icon">
-                <i class="fas fa-graduation-cap"></i>
+                <i class="fas fa-lightbulb"></i>
             </div>
             <div class="logo-text">Study<span>Hub</span></div>
         </div>

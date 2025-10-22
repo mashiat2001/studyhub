@@ -238,7 +238,7 @@
     <div class="verification-container">
         <div class="logo">
             <div class="logo-icon">
-                <i class="fas fa-graduation-cap"></i>
+                <i class="fas fa-lightbulb"></i>
             </div>
             <div class="logo-text">Study<span>Hub</span></div>
         </div>
@@ -364,7 +364,7 @@
         ?>
         
         <div class="support-note">
-            <p>Need help? Contact our support team at <a href="mailto:support@studyhub.com">support@studyhub.com</a></p>
+            <p>Need help? Contact our support team at <a href="mailto:studyhub2025web@gmail.com">studyhub2025web@gmail.com</a></p>
         </div>
     </div>
 </body>

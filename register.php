@@ -13,6 +13,10 @@ if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
+// Single predefined admin credential - NO REGISTRATION NEEDED
+$admin_email = 'studyhub2025web@gmail.com';
+$admin_password = 'studyhub2025';
+
 // Load PHPMailer
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -37,89 +41,94 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $confirm_password = $_POST['confirm_password'];
     $role     = $_POST['role'];
     
-    // Validate inputs
-    if (empty($name) || empty($email) || empty($password) || empty($confirm_password) || empty($role)) {
-        $error = "All fields are required.";
-    } elseif (!preg_match($emailRegex, $email)) {
-        $error = "Please enter a valid email address (e.g., user@example.com).";
-    } elseif (!preg_match($passwordRegex, $password)) {
-        $error = "Password must be at least 6 characters long and contain at least one letter and one number.";
-    } elseif ($password !== $confirm_password) {
-        $error = "Passwords do not match.";
+    // Check if trying to register with admin email
+    if ($email === $admin_email) {
+        $error = "Admin email cannot be used for registration. Please use a different email.";
     } else {
-        // Check if email already exists
-        $check_stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
-        $check_stmt->bind_param("s", $email);
-        $check_stmt->execute();
-        $check_result = $check_stmt->get_result();
-        
-        if ($check_result->num_rows > 0) {
-            $error = "Email is already registered.";
+        // Validate inputs
+        if (empty($name) || empty($email) || empty($password) || empty($confirm_password) || empty($role)) {
+            $error = "All fields are required.";
+        } elseif (!preg_match($emailRegex, $email)) {
+            $error = "Please enter a valid email address (e.g., user@example.com).";
+        } elseif (!preg_match($passwordRegex, $password)) {
+            $error = "Password must be at least 6 characters long and contain at least one letter and one number.";
+        } elseif ($password !== $confirm_password) {
+            $error = "Passwords do not match.";
         } else {
-            // Hash password
-            $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-            $token = bin2hex(random_bytes(16));
-
-            // Insert user into DB with role
-            $stmt = $conn->prepare("INSERT INTO users (name, email, password, verification_token, verified, role) VALUES (?, ?, ?, ?, 0, ?)");
-            $stmt->bind_param("sssss", $name, $email, $hashed_password, $token, $role);
-
-            if ($stmt->execute()) {
-                // Send verification email
-                $mail = new PHPMailer(true);
-
-                try {
-                    // SMTP settings - FIXED: Use proper authentication
-                    $mail->isSMTP();
-                    $mail->Host       = 'smtp.gmail.com'; 
-                    $mail->SMTPAuth   = true;
-                    $mail->Username   = 'masiatjahankhan@gmail.com';
-                    $mail->Password   = 'ynsjpozvmdxdxkud'; // Use App Password if 2FA is enabled
-                    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-                    $mail->Port       = 587;
-
-                    // Recipients
-                    $mail->setFrom('masiatjahankhan@gmail.com', 'StudyHub');
-                    $mail->addAddress($email, $name);
-
-                    // Content
-                    $verifyLink = "http://localhost/studyhub/verify.php?token=$token";
-                    $mail->isHTML(true);
-                    $mail->Subject = 'Verify Your Email - StudyHub';
-                    $mail->Body    = "
-                        <html>
-                        <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
-                            <div style='max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;'>
-                                <h2 style='color: #7E6CCA; text-align: center;'>Welcome to StudyHub!</h2>
-                                <p>Hi $name,</p>
-                                <p>Thank you for registering with StudyHub. To complete your registration, please verify your email address by clicking the button below:</p>
-                                <div style='text-align: center; margin: 30px 0;'>
-                                    <a href='$verifyLink' style='background-color: #7E6CCA; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;'>Verify Email Address</a>
-                                </div>
-                                <p>If the button doesn't work, you can also copy and paste this link into your browser:</p>
-                                <p style='word-break: break-all; color: #7E6CCA;'>$verifyLink</p>
-                                <p>If you didn't create an account with StudyHub, please ignore this email.</p>
-                                <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'>
-                                <p style='font-size: 12px; color: #888; text-align: center;'>This is an automated message, please do not reply to this email.</p>
-                            </div>
-                        </body>
-                        </html>
-                    ";
-
-                    $mail->send();
-                    
-                    $_SESSION['registration_success'] = "Registration successful! Please check your email to verify your account.";
-                    header("Location: login.php");
-                    exit();
-                } catch (Exception $e) {
-                    $error = "Verification email could not be sent. Please try again later. Error: " . $mail->ErrorInfo;
-                }
+            // Check if email already exists
+            $check_stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
+            $check_stmt->bind_param("s", $email);
+            $check_stmt->execute();
+            $check_result = $check_stmt->get_result();
+            
+            if ($check_result->num_rows > 0) {
+                $error = "Email is already registered.";
             } else {
-                $error = "Error: " . $stmt->error;
+                // Hash password
+                $hashed_password = password_hash($password, PASSWORD_DEFAULT);
+                $token = bin2hex(random_bytes(16));
+
+                // Insert user into DB with role
+                $stmt = $conn->prepare("INSERT INTO users (name, email, password, verification_token, verified, role) VALUES (?, ?, ?, ?, 0, ?)");
+                $stmt->bind_param("sssss", $name, $email, $hashed_password, $token, $role);
+
+                if ($stmt->execute()) {
+                    // Send verification email
+                    $mail = new PHPMailer(true);
+
+                    try {
+                        // SMTP settings
+                        $mail->isSMTP();
+                        $mail->Host       = 'smtp.gmail.com'; 
+                        $mail->SMTPAuth   = true;
+                        $mail->Username   = 'masiatjahankhan@gmail.com';
+                        $mail->Password   = 'ynsjpozvmdxdxkud';
+                        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
+                        $mail->Port       = 587;
+
+                        // Recipients
+                        $mail->setFrom('masiatjahankhan@gmail.com', 'StudyHub');
+                        $mail->addAddress($email, $name);
+
+                        // Content
+                        $verifyLink = "http://localhost/studyhub/verify.php?token=$token";
+                        $mail->isHTML(true);
+                        $mail->Subject = 'Verify Your Email - StudyHub';
+                        $mail->Body    = "
+                            <html>
+                            <body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>
+                                <div style='max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;'>
+                                    <h2 style='color: #7E6CCA; text-align: center;'>Welcome to StudyHub!</h2>
+                                    <p>Hi $name,</p>
+                                    <p>Thank you for registering with StudyHub. To complete your registration, please verify your email address by clicking the button below:</p>
+                                    <div style='text-align: center; margin: 30px 0;'>
+                                        <a href='$verifyLink' style='background-color: #7E6CCA; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;'>Verify Email Address</a>
+                                    </div>
+                                    <p>If the button doesn't work, you can also copy and paste this link into your browser:</p>
+                                    <p style='word-break: break-all; color: #7E6CCA;'>$verifyLink</p>
+                                    <p>If you didn't create an account with StudyHub, please ignore this email.</p>
+                                    <hr style='border: none; border-top: 1px solid #eee; margin: 20px 0;'>
+                                    <p style='font-size: 12px; color: #888; text-align: center;'>This is an automated message, please do not reply to this email.</p>
+                                </div>
+                            </body>
+                            </html>
+                        ";
+
+                        $mail->send();
+                        
+                        $_SESSION['registration_success'] = "Registration successful! Please check your email to verify your account.";
+                        header("Location: login.php");
+                        exit();
+                    } catch (Exception $e) {
+                        $error = "Verification email could not be sent. Please try again later. Error: " . $mail->ErrorInfo;
+                    }
+                } else {
+                    $error = "Error: " . $stmt->error;
+                }
+                $stmt->close();
             }
-            $stmt->close();
+            $check_stmt->close();
         }
-        $check_stmt->close();
     }
 }
 $conn->close();
@@ -130,22 +139,18 @@ $conn->close();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Register - StudyHub</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         :root {
             --primary: #7E6CCA;
             --primary-light: #9F90DB;
             --primary-dark: #6351A6;
-            --secondary: #FF9E6D;
-            --accent: #6DC9FF;
             --text-dark: #2D3748;
             --text-light: #718096;
-            --light-bg: #FFFFFF;
-            --card-bg: rgba(255, 255, 255, 0.95);
-            --border-radius: 12px;
-            --transition: all 0.3s ease;
-            --shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            --light-bg: #F7FAFC;
+            --border-radius: 8px;
+            --shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
         }
         
         * {
@@ -158,92 +163,121 @@ $conn->close();
             font-family: 'Inter', sans-serif;
             background: var(--light-bg);
             color: var(--text-dark);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
+            line-height: 1.6;
         }
         
-        .register-container {
+        .header {
             background: white;
-            border-radius: 20px;
+            padding: 15px 30px;
             box-shadow: var(--shadow);
-            width: 100%;
-            max-width: 450px;
-            overflow: hidden;
-            border: 1px solid #e5e7eb;
-        }
-        
-        .register-header {
-            background: white;
-            color: var(--text-dark);
-            padding: 30px;
-            text-align: center;
-            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
         
         .logo {
             display: flex;
             align-items: center;
-            justify-content: center;
-            margin-bottom: 15px;
+            gap: 10px;
         }
         
         .logo-icon {
             width: 40px;
             height: 40px;
-            background: var(--primary);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             border-radius: 10px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-right: 10px;
-        }
-        
-        .logo-icon i {
             color: white;
+            font-size: 20px;
         }
         
         .logo-text {
             font-size: 24px;
             font-weight: 700;
+            font-family: 'Outfit', sans-serif;
         }
         
-        .register-header h1 {
-            font-size: 24px;
-            margin-bottom: 10px;
+        .logo-text span {
+            color: var(--primary);
+        }
+        
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+        
+        .nav-links a {
+            text-decoration: none;
             color: var(--text-dark);
+            font-weight: 500;
+            padding: 0.5rem 1rem;
+            border-radius: var(--border-radius);
+            transition: all 0.3s ease;
         }
         
-        .register-header p {
+        .nav-links a:hover {
+            background: var(--light-bg);
+        }
+        
+        .nav-links a.active {
+            background: var(--primary);
+            color: white;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 1rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: calc(100vh - 100px);
+        }
+        
+        .register-card {
+            background: white;
+            padding: 2rem;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            width: 100%;
+            max-width: 450px;
+        }
+        
+        .page-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            color: var(--text-dark);
+            text-align: center;
+        }
+        
+        .page-subtitle {
             color: var(--text-light);
-            font-size: 14px;
-        }
-        
-        .register-form {
-            padding: 30px;
+            text-align: center;
+            margin-bottom: 2rem;
         }
         
         .form-group {
-            margin-bottom: 20px;
+            margin-bottom: 1.5rem;
         }
         
         .input-label {
             display: block;
-            margin-bottom: 8px;
+            margin-bottom: 0.5rem;
             font-weight: 500;
             color: var(--text-dark);
-            font-size: 14px;
         }
         
         .input-field {
             width: 100%;
-            padding: 14px;
-            border: 2px solid #e5e7eb;
+            padding: 0.75rem 1rem;
+            border: 2px solid #E2E8F0;
             border-radius: var(--border-radius);
-            font-size: 15px;
-            transition: var(--transition);
+            font-size: 1rem;
+            transition: all 0.3s ease;
             background: white;
         }
         
@@ -259,7 +293,7 @@ $conn->close();
         
         .password-toggle {
             position: absolute;
-            right: 14px;
+            right: 1rem;
             top: 50%;
             transform: translateY(-50%);
             background: none;
@@ -268,46 +302,47 @@ $conn->close();
             cursor: pointer;
         }
         
-        .alert {
-            padding: 12px 15px;
+        .message {
+            padding: 1rem;
+            margin: 1rem 0;
             border-radius: var(--border-radius);
-            margin-bottom: 20px;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
+            font-weight: 500;
         }
         
-        .alert-error {
-            background: #fef2f2;
-            color: #dc2626;
-            border: 1px solid #fecaca;
+        .error {
+            background: #FED7D7;
+            color: #742A2A;
+            border-left: 4px solid #F56565;
         }
         
-        .alert-success {
-            background: #f0f9ff;
-            color: #0369a1;
-            border: 1px solid #bae6fd;
+        .success {
+            background: #C6F6D5;
+            color: #22543D;
+            border-left: 4px solid #48BB78;
         }
         
-        .alert i {
-            margin-right: 8px;
-        }
-        
-        .sign-up-btn {
+        .btn {
             width: 100%;
+            padding: 0.75rem 1rem;
+            border: none;
+            border-radius: var(--border-radius);
+            font-weight: 600;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .btn-primary {
             background: var(--primary);
             color: white;
-            border: none;
-            padding: 14px;
-            border-radius: var(--border-radius);
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: var(--transition);
-            margin-top: 10px;
         }
         
-        .sign-up-btn:hover {
+        .btn-primary:hover {
             background: var(--primary-dark);
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(126, 108, 202, 0.3);
@@ -315,10 +350,9 @@ $conn->close();
         
         .footer-links {
             text-align: center;
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid #e5e7eb;
-            font-size: 14px;
+            margin-top: 1.5rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #E2E8F0;
             color: var(--text-light);
         }
         
@@ -335,43 +369,69 @@ $conn->close();
         select.input-field {
             appearance: none;
             background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e");
-            background-position: right 14px center;
+            background-position: right 1rem center;
             background-repeat: no-repeat;
             background-size: 16px;
-            padding-right: 40px;
+            padding-right: 2.5rem;
         }
         
         .requirement-text {
-            font-size: 12px;
+            font-size: 0.875rem;
             color: var(--text-light);
-            margin-top: 5px;
+            margin-top: 0.5rem;
         }
         
         .requirement-valid {
-            color: #10b981;
+            color: #48BB78;
         }
         
         .requirement-invalid {
-            color: #ef4444;
+            color: #F56565;
+        }
+        
+        .admin-notice {
+            background: #E6FFFA;
+            border: 1px solid #81E6D9;
+            border-radius: var(--border-radius);
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            font-size: 0.875rem;
+            color: #234E52;
+        }
+        
+        .admin-notice i {
+            color: #319795;
+            margin-right: 0.5rem;
         }
     </style>
 </head>
 <body>
-    <div class="register-container">
-        <div class="register-header">
-            <div class="logo">
-                <div class="logo-icon">
-                    <i class="fas fa-graduation-cap"></i>
-                </div>
-                <div class="logo-text" style="color: var(--text-dark);">Study<span style="color: var(--primary);">Hub</span></div>
+    <header class="header">
+        <div class="logo">
+            <div class="logo-icon">
+                <i class="fas fa-lightbulb"></i>
             </div>
-            <h1>Create Your Account</h1>
-            <p>Join StudyHub and start your learning journey</p>
+            <div class="logo-text">Study<span>Hub</span></div>
         </div>
-        
-        <div class="register-form">
+        <div class="nav-links">
+            <a href="index.php">Home</a>
+            <a href="login.php">Login</a>
+            <a href="register.php" class="active">Register</a>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="register-card">
+            <h1 class="page-title">Create Account</h1>
+            <p class="page-subtitle">Join StudyHub and start your learning journey</p>
+            
+            <div class="admin-notice">
+                <i class="fas fa-info-circle"></i>
+                <strong>Admin Access:</strong> Pre-configured administrator account available.
+            </div>
+            
             <?php if (!empty($error)): ?>
-                <div class="alert alert-error">
+                <div class="message error">
                     <i class="fas fa-exclamation-circle"></i> <?php echo $error; ?>
                 </div>
             <?php endif; ?>
@@ -417,13 +477,15 @@ $conn->close();
                 <div class="form-group">
                     <label for="role" class="input-label">Register As</label>
                     <select id="role" name="role" class="input-field" required>
+                        <option value="">Select your role</option>
                         <option value="student" <?php echo (isset($_POST['role']) && $_POST['role']=="student") ? "selected" : ""; ?>>Student</option>
                         <option value="instructor" <?php echo (isset($_POST['role']) && $_POST['role']=="instructor") ? "selected" : ""; ?>>Instructor</option>
-                        <option value="admin" <?php echo (isset($_POST['role']) && $_POST['role']=="admin") ? "selected" : ""; ?>>Admin</option>
                     </select>
                 </div>
                 
-                <button type="submit" name="submit" class="sign-up-btn">Create Account</button>
+                <button type="submit" name="submit" class="btn btn-primary">
+                    <i class="fas fa-user-plus"></i> Create Account
+                </button>
             </form>
             
             <div class="footer-links">
@@ -513,6 +575,7 @@ $conn->close();
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
             const confirmPassword = document.getElementById('confirm_password').value;
+            const role = document.getElementById('role').value;
             
             const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
             const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d).{6,}$/;
@@ -531,6 +594,12 @@ $conn->close();
             
             if (password !== confirmPassword) {
                 alert('Passwords do not match.');
+                e.preventDefault();
+                return false;
+            }
+            
+            if (!role) {
+                alert('Please select a role.');
                 e.preventDefault();
                 return false;
             }
