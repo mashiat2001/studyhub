@@ -1,9 +1,8 @@
 <?php
 session_start();
 
-// Prevent logged-in users from seeing the login/registration pages
+// If user is already logged in, redirect to appropriate dashboard
 if (isset($_SESSION['user'])) {
-    // If already logged in, send to correct dashboard
     $role = $_SESSION['user']['role'] ?? 'student';
     if ($role === 'admin') {
         header('Location: admin_dashboard.php');
@@ -15,13 +14,12 @@ if (isset($_SESSION['user'])) {
     exit();
 }
 
-// Database connection
 $conn = new mysqli('localhost', 'root', '', 'project_db');
 if ($conn->connect_error) {
     die('Connection failed: ' . $conn->connect_error);
 }
 
-// Predefined admin credential - NO DATABASE REGISTRATION NEEDED
+// Hardcoded admin credentials
 $admin_email = 'studyhub2025web@gmail.com';
 $admin_password = 'studyhub2025';
 
@@ -38,63 +36,62 @@ if (isset($_POST['submit'])) {
     $email = trim($_POST['email']);
     $password = $_POST['password'];
 
-    // Validate inputs
     if (empty($email) || empty($password)) {
         $error = "Please fill in all fields.";
     } else {
-        // Check if it's the predefined admin
+        // Check for hardcoded admin
         if ($email === $admin_email && $password === $admin_password) {
-            // Login successful for predefined admin
-            $_SESSION['user'] = [
-                'id' => 0,
-                'name' => 'Administrator',
-                'email' => $admin_email,
-                'role' => 'admin',
-                'verified' => 1
-            ];
-            header('Location: admin_dashboard.php');
-            exit();
-        }
-        
-        // Check if user exists in the database using prepared statement
-        $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
-        $stmt->bind_param("s", $email);
-        $stmt->execute();
-        $result = $stmt->get_result();
-        
-        if ($result->num_rows > 0) {
-            $user = $result->fetch_assoc();
-            if (password_verify($password, $user['password'])) {
-                // Check if user is verified
-                if ($user['verified'] == 0) {
-                    $error = "Please verify your email before logging in.";
-                } else {
-                    // Login successful, start session
-                    $_SESSION['user'] = $user;  // Store user info in session
+            // Fetch the admin user from database (must exist)
+            $stmt = $conn->prepare("SELECT * FROM users WHERE email = ? AND role = 'admin'");
+            $stmt->bind_param("s", $admin_email);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            if ($result->num_rows > 0) {
+                $admin_user = $result->fetch_assoc();
+                $_SESSION['user'] = $admin_user;  // correct ID from database
+                header('Location: admin_dashboard.php');
+                exit();
+            } else {
+                // Admin user not found – instruct to create one
+                $error = "Admin user not found in database. Please run the setup script or contact support.";
+            }
+            $stmt->close();
+        } else {
+            // Normal user login
+            $stmt = $conn->prepare("SELECT * FROM users WHERE email = ?");
+            $stmt->bind_param("s", $email);
+            $stmt->execute();
+            $result = $stmt->get_result();
 
-                    // Redirect based on role
-                    if ($user['role'] === 'admin') {
-                        header('Location: admin_dashboard.php');
-                    } elseif ($user['role'] === 'instructor') {
-                        header('Location: instructor_dashboard.php');
+            if ($result->num_rows > 0) {
+                $user = $result->fetch_assoc();
+                if (password_verify($password, $user['password'])) {
+                    if ($user['verified'] == 0) {
+                        $error = "Please verify your email before logging in.";
                     } else {
-                        header('Location: student_dashboard.php');
+                        $_SESSION['user'] = $user;
+
+                        if ($user['role'] === 'admin') {
+                            header('Location: admin_dashboard.php');
+                        } elseif ($user['role'] === 'instructor') {
+                            header('Location: instructor_dashboard.php');
+                        } else {
+                            header('Location: student_dashboard.php');
+                        }
+                        exit();
                     }
-                    exit();
+                } else {
+                    $error = "Invalid password.";
                 }
             } else {
-                $error = "Invalid password.";
+                $error = "No account found with this email.";
             }
-        } else {
-            $error = "No account found with this email.";
+            $stmt->close();
         }
-        $stmt->close();
     }
 }
 $conn->close();
 ?>
-
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -575,13 +572,13 @@ $conn->close();
         }
         
         .footer-links a {
-            color: #CBD5E0;
+            color: #2f5073ff;
             text-decoration: none;
             transition: var(--transition);
         }
         
         .footer-links a:hover {
-            color: white;
+            color: #6351A6;
         }
         
         /* Responsive Design */
@@ -634,7 +631,6 @@ $conn->close();
     </style>
 </head>
 <body>
-    <!-- Header -->
     <header class="header">
         <div class="logo">
             <div class="logo-icon">
@@ -653,7 +649,6 @@ $conn->close();
         </nav>
     </header>
 
-    <!-- Hero Section -->
     <section class="hero">
         <div class="hero-content">
             <h1 class="hero-title">Where Learning Becomes an <span>Adventure</span></h1>
@@ -685,12 +680,10 @@ $conn->close();
         </div>
         
         <div class="hero-image">
-            <!-- Replace with your image path -->
             <img src="images/studyhub.png" alt="StudyHub Learning Platform">
         </div>
     </section>
 
-    <!-- Features Section -->
     <section class="features-section">
         <h2 class="section-title">Why Choose StudyHub?</h2>
         <p class="section-subtitle">Discover the features that make our learning platform stand out from the rest</p>
@@ -701,7 +694,7 @@ $conn->close();
                     <i class="fas fa-book-open"></i>
                 </div>
                 <h3 class="feature-title">Comprehensive Curriculum</h3>
-                <p class="feature-description">Access complete SSC and HSC curriculum materials with interactive lessons and exercises.</p>
+                <p class="feature-description">Access complete curriculum materials with interactive lessons and exercises.</p>
             </div>
             
             <div class="feature-card">
@@ -794,7 +787,7 @@ $conn->close();
             <form method="POST" class="login-form" id="loginForm">
                 <div class="form-group">
                     <label for="email" class="input-label">Email Address</label>
-                    <input type="email" id="email" name="email" class="input-field" placeholder="student@example.com" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>" required>
+                    <input type="email" id="email" name="email" class="input-field" placeholder="user@example.com" value="<?php echo isset($_POST['email']) ? htmlspecialchars($_POST['email']) : ''; ?>" required>
                 </div>
                 
                 <div class="form-group">
@@ -802,7 +795,7 @@ $conn->close();
                     <div class="password-container">
                         <input type="password" id="password" name="password" class="input-field" placeholder="Enter your password" required>
                         <button type="button" class="password-toggle" id="passwordToggle">
-                            
+                            <i class="fas fa-eye"></i>
                         </button>
                     </div>
                 </div>

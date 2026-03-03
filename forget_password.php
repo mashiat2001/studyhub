@@ -457,7 +457,7 @@ $conn->close();
                 </ul>
                 
                 <div class="support-note">
-                    <p><strong>Need help?</strong> Contact our support team at <a href="mailto:support@studyhub.com">support@studyhub.com</a></p>
+                    <p><strong>Need help?</strong> Contact our support team at <a href="mailto:studyhub2025web@gmail.com">studyhub2025web@gmail.com</a></p>
                 </div>
             </div>
             
@@ -498,11 +498,11 @@ $conn->close();
         <div class="footer-content">
             <div class="logo" style="justify-content: center;">
                 <div class="logo-icon">
-                    <i class="fas fa-graduation-cap"></i>
+                    <i class="fas fa-lightbulb"></i>
                 </div>
                 <div class="logo-text">Study<span>Hub</span></div>
             </div>
-            <p>© 2023 StudyHub - Interactive Learning Platform. All rights reserved.</p>
+            <p>© 2025 StudyHub - Interactive Learning Platform. All rights reserved.</p>
             <div class="footer-links-row">
                 <a href="#">Privacy Policy</a>
                 <a href="#">Terms of Service</a>

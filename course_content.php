@@ -16,6 +16,7 @@ if (!isset($_GET['id'])) {
 $course_id = intval($_GET['id']);
 $file_id = isset($_GET['file_id']) ? intval($_GET['file_id']) : null;
 
+// Get course info
 $stmt = $conn->prepare("SELECT * FROM courses WHERE id = ?");
 $stmt->bind_param("i", $course_id);
 $stmt->execute();
@@ -42,13 +43,15 @@ if (!$can_access) {
     die("You don't have access to this course");
 }
 
-// Get course files
+// Get all course files
 $files_stmt = $conn->prepare("SELECT * FROM course_files WHERE course_id = ?");
 $files_stmt->bind_param("i", $course_id);
 $files_stmt->execute();
 $files = $files_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 
-// Get specific file if file_id is provided
+$total_files = count($files);
+
+// Get current file if specified
 $current_file = null;
 if ($file_id) {
     $file_stmt = $conn->prepare("SELECT * FROM course_files WHERE id = ? AND course_id = ?");
@@ -57,9 +60,54 @@ if ($file_id) {
     $current_file = $file_stmt->get_result()->fetch_assoc();
 }
 
-$conn->close();
-?>
+// --- PROGRESS TRACKING (only for students) ---
+if ($user['role'] === 'student') {
+    // If a file is being viewed, record it in course_content_views (if not already)
+    if ($current_file) {
+        // Check if already viewed
+        $view_check = $conn->prepare("SELECT id FROM course_content_views WHERE user_id = ? AND course_id = ? AND file_id = ?");
+        $view_check->bind_param("iii", $user['id'], $course_id, $file_id);
+        $view_check->execute();
+        $viewed = $view_check->get_result()->fetch_assoc();
 
+        if (!$viewed) {
+            // Record view
+            $record_view = $conn->prepare("INSERT INTO course_content_views (user_id, course_id, file_id) VALUES (?, ?, ?)");
+            $record_view->bind_param("iii", $user['id'], $course_id, $file_id);
+            $record_view->execute();
+        }
+    }
+
+    // Count how many files this student has viewed
+    $viewed_count_stmt = $conn->prepare("SELECT COUNT(DISTINCT file_id) as viewed FROM course_content_views WHERE user_id = ? AND course_id = ?");
+    $viewed_count_stmt->bind_param("ii", $user['id'], $course_id);
+    $viewed_count_stmt->execute();
+    $viewed_count = $viewed_count_stmt->get_result()->fetch_assoc()['viewed'];
+
+    // Calculate progress percentage
+    $progress = $total_files > 0 ? round(($viewed_count / $total_files) * 100) : 0;
+
+    // Update user_courses progress
+    $update_progress = $conn->prepare("UPDATE user_courses SET progress = ? WHERE user_id = ? AND course_id = ?");
+    $update_progress->bind_param("iii", $progress, $user['id'], $course_id);
+    $update_progress->execute();
+
+    // Optional: store current progress in a variable for display
+    $current_progress = $progress;
+} else {
+    $current_progress = null; // not shown for instructors/admins
+}
+
+$conn->close();
+
+function formatFileSize($bytes) {
+    if ($bytes == 0) return '0 Bytes';
+    $k = 1024;
+    $sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    $i = floor(log($bytes) / log($k));
+    return number_format($bytes / pow($k, $i), 2) . ' ' . $sizes[$i];
+}
+?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -181,6 +229,34 @@ $conn->close();
         .course-description {
             line-height: 1.6;
             color: var(--text-dark);
+        }
+        
+        .progress-indicator {
+            margin-top: 15px;
+            padding: 15px;
+            background: var(--light-bg);
+            border-radius: var(--border-radius);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            flex-wrap: wrap;
+        }
+        .progress-bar-container {
+            flex: 1;
+            height: 10px;
+            background: #e2e8f0;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        .progress-bar-fill {
+            height: 100%;
+            background: var(--success);
+            width: <?php echo $current_progress ?? 0; ?>%;
+            transition: width 0.3s ease;
+        }
+        .progress-text {
+            font-weight: 600;
+            color: var(--success);
         }
         
         .content-section {
@@ -479,8 +555,8 @@ $conn->close();
                     </div>
                     <?php if ($course['price'] && $course['price'] > 0): ?>
                     <div class="meta-item">
-                        <i class="fas fa-dollar-sign"></i>
-                        <span>Price: $<?php echo number_format($course['price'], 2); ?></span>
+                        <i class="fas fa-money-bill-wave"></i>
+                        <span>Price: ৳<?php echo number_format($course['price'], 2); ?></span>
                     </div>
                     <?php endif; ?>
                     <div class="meta-item">
@@ -496,6 +572,16 @@ $conn->close();
                 <div class="course-description">
                     <?php echo nl2br(htmlspecialchars($course['description'])); ?>
                 </div>
+
+                <!-- Progress bar for students -->
+                <?php if ($user['role'] === 'student'): ?>
+                    <div class="progress-indicator">
+                        <div class="progress-bar-container">
+                            <div class="progress-bar-fill" style="width: <?php echo $current_progress; ?>%;"></div>
+                        </div>
+                        <div class="progress-text"><?php echo $current_progress; ?>% Complete</div>
+                    </div>
+                <?php endif; ?>
             </div>
 
             <!-- File Viewer -->
@@ -545,16 +631,5 @@ $conn->close();
             </div>
         </div>
     </div>
-
-    <?php 
-    // Function to format file size
-    function formatFileSize($bytes) {
-        if ($bytes == 0) return '0 Bytes';
-        $k = 1024;
-        $sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        $i = floor(log($bytes) / log($k));
-        return number_format($bytes / pow($k, $i), 2) . ' ' . $sizes[$i];
-    }
-    ?>
 </body>
 </html>

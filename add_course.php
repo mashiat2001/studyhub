@@ -5,6 +5,9 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'instructor') {
     exit();
 }
 
+// Load Composer autoloader for PDF parser
+require_once __DIR__ . '/vendor/autoload.php';
+
 $user = $_SESSION['user'];
 $conn = new mysqli("localhost", "root", "", "project_db");
 
@@ -29,6 +32,50 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         if ($stmt->execute()) {
             $course_id = $stmt->insert_id;
             $success = "Course created successfully! Waiting for admin approval.";
+            
+            // --- NOTIFICATIONS ---
+            
+            // 1. Notify instructor (self) that course is pending
+            $instructor_message = "Your course '{$title}' has been submitted for admin approval.";
+            $instructor_link = "instructor_dashboard.php";
+            $notify_instructor = $conn->prepare("INSERT INTO notifications (user_id, role, message, link) VALUES (?, 'instructor', ?, ?)");
+            if ($notify_instructor) {
+                $notify_instructor->bind_param("iss", $user['id'], $instructor_message, $instructor_link);
+                if (!$notify_instructor->execute()) {
+                    error_log("Instructor notification failed: " . $notify_instructor->error);
+                }
+                $notify_instructor->close();
+            } else {
+                error_log("Prepare failed for instructor notification: " . $conn->error);
+            }
+            
+            // 2. Notify all admins (with error checking)
+            $admin_ids = [];
+            $admins_result = $conn->query("SELECT id FROM users WHERE role = 'admin'");
+            if ($admins_result && $admins_result->num_rows > 0) {
+                while ($admin_row = $admins_result->fetch_assoc()) {
+                    $admin_ids[] = $admin_row['id'];
+                }
+            } else {
+                error_log("No admin users found in database. Admin notification not sent.");
+            }
+
+            if (!empty($admin_ids)) {
+                $admin_message = "A new course '{$title}' has been submitted for approval by {$user['name']}.";
+                $admin_link = "admin_approve_courses.php";
+                $notify_admin = $conn->prepare("INSERT INTO notifications (user_id, role, message, link) VALUES (?, 'admin', ?, ?)");
+                if ($notify_admin) {
+                    foreach ($admin_ids as $admin_id) {
+                        $notify_admin->bind_param("iss", $admin_id, $admin_message, $admin_link);
+                        if (!$notify_admin->execute()) {
+                            error_log("Failed to insert admin notification for user $admin_id: " . $notify_admin->error);
+                        }
+                    }
+                    $notify_admin->close();
+                } else {
+                    error_log("Prepare failed for admin notification: " . $conn->error);
+                }
+            }
             
             // SIMPLE FILE UPLOAD HANDLING
             if ($course_id && !empty($_FILES['course_files'])) {
@@ -67,6 +114,26 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                                 
                                 if ($file_stmt->execute()) {
                                     $uploaded_count++;
+                                    
+                                    // --- PDF text extraction ---
+                                    if (pathinfo($name, PATHINFO_EXTENSION) === 'pdf') {
+                                        try {
+                                            $parser = new \Smalot\PdfParser\Parser();
+                                            $pdf = $parser->parseFile($file_path);
+                                            $text = $pdf->getText();
+                                            // Clean up extra whitespace
+                                            $text = preg_replace('/\s+/', ' ', $text);
+                                            
+                                            // Store in course_material_contents
+                                            $content_stmt = $conn->prepare("INSERT INTO course_material_contents (course_id, file_name, content) VALUES (?, ?, ?)");
+                                            $content_stmt->bind_param("iss", $course_id, $name, $text);
+                                            $content_stmt->execute();
+                                            $content_stmt->close();
+                                        } catch (Exception $e) {
+                                            // Log the error but don't interrupt the upload
+                                            error_log("PDF extraction failed for file $name: " . $e->getMessage());
+                                        }
+                                    }
                                 }
                                 $file_stmt->close();
                             }
@@ -95,7 +162,7 @@ $conn->close();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Add Course - StudyHub</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
         :root {
@@ -155,6 +222,7 @@ $conn->close();
         .logo-text {
             font-size: 24px;
             font-weight: 700;
+            font-family: 'Outfit', sans-serif;
         }
         
         .logo-text span {
@@ -181,6 +249,16 @@ $conn->close();
             background: var(--primary-dark);
         }
         
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+            margin-bottom: 20px;
+        }
+        
         .container {
             max-width: 800px;
             margin: 0 auto;
@@ -199,6 +277,7 @@ $conn->close();
             font-weight: 600;
             margin-bottom: 20px;
             color: var(--text-dark);
+            font-family: 'Outfit', sans-serif;
         }
         
         .form-group {

@@ -1,23 +1,19 @@
 <?php
 session_start();
 
-// Redirect to dashboard if already logged in
 if (isset($_SESSION['user'])) {
     header('Location: dashboard.php');
     exit();
 }
 
-// Database connection
 $conn = new mysqli("localhost", "root", "", "project_db");
 if ($conn->connect_error) {
     die("Connection failed: " . $conn->connect_error);
 }
 
-// Single predefined admin credential - NO REGISTRATION NEEDED
 $admin_email = 'studyhub2025web@gmail.com';
 $admin_password = 'studyhub2025';
 
-// Load PHPMailer
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
@@ -28,12 +24,9 @@ require 'PHPMailer/src/SMTP.php';
 $error = '';
 $success = '';
 
-// Enhanced email validation regex
 $emailRegex = '/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/';
-// Enhanced password validation regex (at least 6 chars, 1 letter, 1 number)
 $passwordRegex = '/^(?=.*[A-Za-z])(?=.*\d).{6,}$/';
 
-// If form is submitted
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $name     = trim($_POST['name']);
     $email    = trim($_POST['email']);
@@ -41,11 +34,9 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $confirm_password = $_POST['confirm_password'];
     $role     = $_POST['role'];
     
-    // Check if trying to register with admin email
     if ($email === $admin_email) {
         $error = "Admin email cannot be used for registration. Please use a different email.";
     } else {
-        // Validate inputs
         if (empty($name) || empty($email) || empty($password) || empty($confirm_password) || empty($role)) {
             $error = "All fields are required.";
         } elseif (!preg_match($emailRegex, $email)) {
@@ -55,7 +46,6 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         } elseif ($password !== $confirm_password) {
             $error = "Passwords do not match.";
         } else {
-            // Check if email already exists
             $check_stmt = $conn->prepare("SELECT id FROM users WHERE email = ?");
             $check_stmt->bind_param("s", $email);
             $check_stmt->execute();
@@ -64,18 +54,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             if ($check_result->num_rows > 0) {
                 $error = "Email is already registered.";
             } else {
-                // Hash password
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
                 $token = bin2hex(random_bytes(16));
 
-                // Insert user into DB with role
                 $stmt = $conn->prepare("INSERT INTO users (name, email, password, verification_token, verified, role) VALUES (?, ?, ?, ?, 0, ?)");
                 $stmt->bind_param("sssss", $name, $email, $hashed_password, $token, $role);
 
                 if ($stmt->execute()) {
-                    // Send verification email
                     $mail = new PHPMailer(true);
-
                     try {
                         // SMTP settings
                         $mail->isSMTP();
@@ -113,8 +99,20 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
                             </body>
                             </html>
                         ";
-
                         $mail->send();
+                        
+                        // --- NEW: Notify all admins about new registration ---
+                        $admins = $conn->query("SELECT id FROM users WHERE role = 'admin'");
+                        $admin_message = "New user registered: {$name} ({$email}) as {$role}.";
+                        $admin_link = "manage_users.php";
+                        $notify_admin = $conn->prepare("INSERT INTO notifications (user_id, role, message, link) VALUES (?, 'admin', ?, ?)");
+                        while ($admin = $admins->fetch_assoc()) {
+                            $admin_id = $admin['id'];
+                            $notify_admin->bind_param("iss", $admin_id, $admin_message, $admin_link);
+                            $notify_admin->execute();
+                        }
+                        $notify_admin->close();
+                        // --- END NEW ---
                         
                         $_SESSION['registration_success'] = "Registration successful! Please check your email to verify your account.";
                         header("Location: login.php");
@@ -142,6 +140,7 @@ $conn->close();
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <style>
+        /* Your existing styles remain unchanged – they are preserved exactly as you had them */
         :root {
             --primary: #7E6CCA;
             --primary-light: #9F90DB;

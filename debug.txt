@@ -1,0 +1,34 @@
+Array
+(
+    [tran_id] => TXN-699c74340db16
+    [val_id] => 260223213748EQqaUjCKaGi6cMB
+    [amount] => 700.00
+    [card_type] => VISA-Dutch Bangla
+    [store_amount] => 682.50
+    [card_no] => 418117XXXXXX7814
+    [bank_tran_id] => 260223213748EFvnnjgZw9lM1Zp
+    [status] => VALID
+    [tran_date] => 2026-02-23 21:37:26
+    [error] => 
+    [currency] => BDT
+    [card_issuer] => TRUST BANK, LTD.
+    [card_brand] => VISA
+    [card_sub_brand] => Classic
+    [card_issuer_country] => Bangladesh
+    [card_issuer_country_code] => BD
+    [store_id] => study6995d2ca60f81
+    [verify_sign] => 4dcf27aa3eaebc66849d5b60b80e1562
+    [verify_key] => amount,bank_tran_id,base_fair,card_brand,card_issuer,card_issuer_country,card_issuer_country_code,card_no,card_sub_brand,card_type,currency,currency_amount,currency_rate,currency_type,error,risk_level,risk_title,status,store_amount,store_id,tran_date,tran_id,val_id,value_a,value_b,value_c,value_d
+    [verify_sign_sha2] => d5745057d8af0524f7cfb8307adbe72cfbdf853fa7c64cd31b40725afc1df830
+    [currency_type] => BDT
+    [currency_amount] => 700.00
+    [currency_rate] => 1.0000
+    [base_fair] => 0.00
+    [value_a] => 25
+    [value_b] => 
+    [value_c] => 
+    [value_d] => 
+    [subscription_id] => 
+    [risk_level] => 0
+    [risk_title] => Safe
+)

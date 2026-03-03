@@ -57,7 +57,7 @@ if (isset($_POST['update_role'])) {
     $new_role = $_POST['role'];
     
     // Prevent changing role of admin users
-    $current_user_stmt = $conn->prepare("SELECT role FROM users WHERE id = ?");
+    $current_user_stmt = $conn->prepare("SELECT role, name FROM users WHERE id = ?");
     $current_user_stmt->bind_param("i", $user_id);
     $current_user_stmt->execute();
     $current_user_result = $current_user_stmt->get_result();
@@ -74,7 +74,15 @@ if (isset($_POST['update_role'])) {
             $update_stmt->bind_param("si", $new_role, $user_id);
             
             if ($update_stmt->execute()) {
-                $_SESSION['message'] = "User role updated successfully";
+                // Notify the user about role change
+                $message = "Your role has been updated to " . ucfirst($new_role) . " by an administrator.";
+                $link = ($new_role === 'student') ? "student_dashboard.php" : "instructor_dashboard.php";
+                $notify = $conn->prepare("INSERT INTO notifications (user_id, role, message, link) VALUES (?, ?, ?, ?)");
+                $notify->bind_param("isss", $user_id, $new_role, $message, $link);
+                $notify->execute();
+                $notify->close();
+                
+                $_SESSION['message'] = "User role updated successfully. User notified.";
             } else {
                 $_SESSION['error'] = "Error updating role: " . $conn->error;
             }

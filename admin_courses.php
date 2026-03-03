@@ -8,9 +8,18 @@ if (!isset($_SESSION['user']) || $_SESSION['user']['role'] !== 'admin') {
 $user = $_SESSION['user'];
 $conn = new mysqli("localhost", "root", "", "project_db");
 
-// Get all courses
+// Get all courses with proper instructor names
 $courses = [];
-$stmt = $conn->prepare("SELECT * FROM courses ORDER BY created_at DESC");
+$stmt = $conn->prepare("
+    SELECT c.*, 
+           CASE 
+               WHEN u.name IS NOT NULL THEN u.name 
+               ELSE c.instructor 
+           END as instructor_name
+    FROM courses c 
+    LEFT JOIN users u ON c.instructor_id = u.id 
+    ORDER BY c.created_at DESC
+");
 $stmt->execute();
 $result = $stmt->get_result();
 while ($row = $result->fetch_assoc()) {
@@ -278,6 +287,11 @@ $conn->close();
             font-weight: 500;
             margin-bottom: 20px;
         }
+        
+        .unknown-instructor {
+            color: #F59E0B;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
@@ -294,7 +308,7 @@ $conn->close();
                 <a href="admin_dashboard.php">Dashboard</a>
                 <a href="manage_users.php">Users</a>
                 <a href="all_courses.php" class="active">Courses</a>
-                <a href="manage_courses.php">Approve Courses</a>
+                <a href="admin_approve_courses.php">Approve Courses</a>
             </div>
             <a href="logout.php" class="logout-btn">
                 <i class="fas fa-sign-out-alt"></i> Logout
@@ -315,7 +329,14 @@ $conn->close();
                     <div class="course-card">
                         <div class="course-header">
                             <h3 class="course-title"><?php echo htmlspecialchars($course['title']); ?></h3>
-                            <div class="course-instructor">By <?php echo htmlspecialchars($course['instructor']); ?></div>
+                            <div class="course-instructor">
+                                By 
+                                <?php if (!empty($course['instructor_name']) && $course['instructor_name'] !== '0'): ?>
+                                    <?php echo htmlspecialchars($course['instructor_name']); ?>
+                                <?php else: ?>
+                                    <span class="unknown-instructor">Unknown Instructor</span>
+                                <?php endif; ?>
+                            </div>
                         </div>
                         <div class="course-body">
                             <p class="course-description"><?php echo htmlspecialchars($course['description'] ?? 'No description available'); ?></p>

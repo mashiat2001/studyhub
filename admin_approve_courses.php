@@ -13,20 +13,47 @@ if (isset($_GET['action']) && isset($_GET['id'])) {
     $course_id = intval($_GET['id']);
     $action = $_GET['action'];
     
-    if ($action === 'approve') {
-        $stmt = $conn->prepare("UPDATE courses SET status = 'approved' WHERE id = ?");
-        $stmt->bind_param("i", $course_id);
-        if ($stmt->execute()) {
-            $_SESSION['message'] = "Course approved successfully!";
+    // Get course details for notification
+    $stmt = $conn->prepare("SELECT title, instructor_id FROM courses WHERE id = ?");
+    $stmt->bind_param("i", $course_id);
+    $stmt->execute();
+    $course = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
+
+    if ($course) {
+        if ($action === 'approve') {
+            $stmt = $conn->prepare("UPDATE courses SET status = 'approved' WHERE id = ?");
+            $stmt->bind_param("i", $course_id);
+            if ($stmt->execute()) {
+                // Notify instructor
+                $message = "Your course '{$course['title']}' has been approved and is now live.";
+                $link = "instructor_dashboard.php";
+                $notify = $conn->prepare("INSERT INTO notifications (user_id, role, message, link) VALUES (?, 'instructor', ?, ?)");
+                $notify->bind_param("iss", $course['instructor_id'], $message, $link);
+                $notify->execute();
+                $notify->close();
+
+                $_SESSION['message'] = "Course approved successfully! Instructor notified.";
+            }
+            $stmt->close();
+        } elseif ($action === 'reject') {
+            $stmt = $conn->prepare("UPDATE courses SET status = 'rejected' WHERE id = ?");
+            $stmt->bind_param("i", $course_id);
+            if ($stmt->execute()) {
+                // Notify instructor
+                $message = "Your course '{$course['title']}' has been rejected. Please review and resubmit.";
+                $link = "instructor_dashboard.php";
+                $notify = $conn->prepare("INSERT INTO notifications (user_id, role, message, link) VALUES (?, 'instructor', ?, ?)");
+                $notify->bind_param("iss", $course['instructor_id'], $message, $link);
+                $notify->execute();
+                $notify->close();
+
+                $_SESSION['message'] = "Course rejected successfully. Instructor notified.";
+            }
+            $stmt->close();
         }
-        $stmt->close();
-    } elseif ($action === 'reject') {
-        $stmt = $conn->prepare("UPDATE courses SET status = 'rejected' WHERE id = ?");
-        $stmt->bind_param("i", $course_id);
-        if ($stmt->execute()) {
-            $_SESSION['message'] = "Course rejected successfully!";
-        }
-        $stmt->close();
+    } else {
+        $_SESSION['message'] = "Course not found.";
     }
     
     header("Location: admin_approve_courses.php");
@@ -41,6 +68,7 @@ $result = $stmt->get_result();
 while ($row = $result->fetch_assoc()) {
     $pending_courses[] = $row;
 }
+$stmt->close();
 
 $conn->close();
 ?>
@@ -352,9 +380,6 @@ $conn->close();
                         </div>
                         
                         <div class="course-actions">
-                            <a href="course_details.php?id=<?php echo $course['id']; ?>" class="btn btn-view">
-                                <i class="fas fa-eye"></i> View Content
-                            </a>
                             <a href="admin_approve_courses.php?action=approve&id=<?php echo $course['id']; ?>" class="btn btn-approve" onclick="return confirm('Are you sure you want to approve this course?')">
                                 <i class="fas fa-check"></i> Approve Course
                             </a>
